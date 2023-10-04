@@ -1,3 +1,4 @@
+const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -30,7 +31,7 @@ class FilesController {
       }
 
       const {
-        name, type, parentId, isPublic, data,
+        name, type, isPublic, data,
       } = req.body;
 
       if (!name) {
@@ -44,7 +45,7 @@ class FilesController {
       if (!data && type !== 'folder') {
         return res.status(400).json({ error: 'Missing data' });
       }
-
+      const parentId = req.body.parentId !== undefined ? req.body.parentId : 0;
       const parentFile = await dbClient.getFileByField({ parentId });
 
       if (parentFile !== null) {
@@ -65,7 +66,7 @@ class FilesController {
         name,
         type,
         isPublic: isPublic || false,
-        parentId: `ObjectId(${parentId})` || 0,
+        parentId: parentId || 0,
         localPath: path,
       };
       const newFile = await dbClient.addFile(file);
@@ -87,18 +88,18 @@ class FilesController {
     const fileName = uuidv4();
     const filePath = path.join(folderPath, fileName);
 
-    // New folder if not present
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
+    try {
+      // Store file locally
+      if (type !== 'folder') {
+        const fileContent = Buffer.from(data, 'base64');
+        fs.writeFileSync(filePath, fileContent);
+      }
 
-    // Store file locally
-    if (type !== 'folder') {
-      const fileContent = Buffer.from(data, 'base64');
-      fs.writeFileSync(filePath, fileContent);
+      return filePath;
+    } catch (error) {
+      console.error('Error in localStorage:', error);
+      throw error; // Rethrow the error after logging
     }
-
-    return filePath;
   }
 }
 
